@@ -1,103 +1,206 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import ProtectedRoute from "@/components/ProtectedRoutes";
+import api from "@/lib/api";
+import { useEffect, useState } from "react";
+import LogoutButton from "@/components/LogoutButton";
+import Link from "next/link";
+import { motion } from "framer-motion";
+import LikeButton from "@/components/shsfui/button/like-button";
+
+type Post = {
+  id: number;
+  content: string;
+  category: string;
+  image_url?: string;
+  like_count: number;
+  comment_count: number;
+};
+
+export default function HomePage() {
+  const [posts, setPosts] = useState<Post[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  const [content, setContent] = useState("");
+  const [category, setCategory] = useState("general");
+  const [image, setImage] = useState<File | null>(null);
+
+  const fetchPosts = () => {
+  api.get("posts/?ordering=-created_at").then((res) => {
+    if (res.data.results) {
+      setPosts(res.data.results);
+    } else {
+      setPosts(res.data);
+    }
+  });
+};
+
+  useEffect(() => {
+    fetchPosts();
+  }, []);
+
+  const handleCreatePost = async () => {
+  if (!content.trim()) return;
+
+  const formData = new FormData();
+  formData.append("content", content);
+  formData.append("category", category);
+  if (image) {
+    formData.append("image", image);
+  }
+
+  const res = await api.post("posts/", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+  // Naye post ko top pe add karo
+  setPosts((prev) => [res.data, ...prev]);
+
+  setContent("");
+  setCategory("general");
+  setImage(null);
+  setShowModal(false);
+};
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <ProtectedRoute>
+      <div className="min-h-screen bg-gradient-to-br from-[#0f172a] via-[#1e293b] to-[#0f172a] text-white relative">
+        {/* Top Navigation */}
+        <header className="flex items-center justify-between px-8 py-4 backdrop-blur-lg bg-white/5 border-b border-white/10 sticky top-0 z-50">
+          <h1 className="text-2xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent">
+            SocialSphere
+          </h1>
+          <div className="flex items-center gap-4">
+            <Link
+              href="/change-password"
+              className="px-4 py-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 hover:from-purple-500 hover:to-blue-500 transition-all duration-300"
+            >
+              Change Password
+            </Link>
+            <LogoutButton />
+          </div>
+        </header>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+        {/* Posts Grid */}
+        <main className="max-w-6xl mx-auto px-6 py-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          {posts.length > 0 ? (
+            posts.map((post, idx) => (
+              <motion.div
+                key={post.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: idx * 0.05 }}
+                onClick={() => (window.location.href = `/posts/${post.id}`)}
+                className="group relative rounded-2xl overflow-hidden shadow-lg cursor-pointer border border-white/10 hover:scale-[1.02] hover:shadow-2xl transition-all duration-500"
+                style={{
+                  backgroundImage: `url(${post.image_url || "https://images.unsplash.com/photo-1476842634003-7dcca8f832de"})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                }}
+              >
+                {/* Overlay */}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent"></div>
+
+                {/* Content */}
+                <div className="relative z-10 p-5">
+                  <h2 className="text-lg font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                    {post.category}
+                  </h2>
+                  <p className="mt-2 text-sm text-gray-200 line-clamp-3">
+                    {post.content}
+                  </p>
+                  <div className="flex gap-4 mt-4 items-center text-sm text-gray-300">
+                    <LikeButton
+                      initialLiked={false}
+                      onLikeChange={(isLiked) => {
+                        setPosts((prev) =>
+                          prev.map((p) =>
+                            p.id === post.id
+                              ? {
+                                  ...p,
+                                  like_count:
+                                    p.like_count + (isLiked ? 1 : -1),
+                                }
+                              : p
+                          )
+                        );
+                      }}
+                    />
+                    <span>{post.like_count}</span>
+                    <span>💬 {post.comment_count}</span>
+                  </div>
+                </div>
+              </motion.div>
+            ))
+          ) : (
+            <p className="col-span-full text-gray-400 text-center">
+              No posts yet
+            </p>
+          )}
+        </main>
+
+        {/* Floating Action Button */}
+        <div className="fixed bottom-8 right-8 group">
+          <div className="absolute -top-8 right-0 opacity-0 group-hover:opacity-100 transition bg-black/70 text-white text-xs rounded px-2 py-1">
+            Click to post
+          </div>
+          <button
+            onClick={() => setShowModal(true)}
+            className="bg-gradient-to-r from-blue-500 to-purple-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-full w-14 h-14 flex items-center justify-center shadow-lg text-3xl"
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            +
+          </button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+
+        {/* Modal */}
+        {showModal && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <div className="bg-gray-900/80 backdrop-blur-lg border border-white/10 rounded-2xl shadow-xl w-full max-w-md p-6">
+              <h2 className="text-xl font-bold mb-4 bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
+                Create Post
+              </h2>
+
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full border border-white/10 bg-black/30 rounded-lg p-3 mb-3 text-white"
+              >
+                <option value="general">General</option>
+                <option value="announcement">Announcement</option>
+                <option value="question">Question</option>
+              </select>
+
+              <textarea
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                placeholder="What's on your mind?"
+                className="w-full border border-white/10 bg-black/30 rounded-lg p-3 h-32 resize-none mb-3 text-white"
+              />
+
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => setImage(e.target.files?.[0] || null)}
+                className="mb-3 text-sm text-gray-300"
+              />
+
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="px-4 py-2 bg-gray-700/50 hover:bg-gray-600 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleCreatePost}
+                  className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-500 rounded-lg hover:from-purple-500 hover:to-blue-500"
+                >
+                  Post
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </ProtectedRoute>
   );
 }
