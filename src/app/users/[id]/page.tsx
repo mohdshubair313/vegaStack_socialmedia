@@ -1,137 +1,105 @@
+// app/users/[id]/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import api from "@/lib/api";
+import { motion } from "framer-motion";
+import axios from "axios";
 import Image from "next/image";
-import { Button } from "@/components/ui/button";
-import { Globe, MapPin, UserPlus, Users } from "lucide-react";
+import { useParams } from "next/navigation";
 
-interface UserProfile {
-  user: {
-    id: number;
-    username: string;
-    email: string;
-  };
+// ✅ Type definitions for API response
+interface UserInfo {
+  id: number;
+  username: string;
+  email: string;
+}
+
+interface UserProfileData {
+  user: UserInfo;
   bio: string;
   avatar_url: string | null;
-  website: string;
-  location: string;
-  privacy: string;
+  website: string | null;
+  location: string | null;
+  privacy: "public" | "private";
   followers_count: number;
   following_count: number;
   posts_count: number;
 }
 
-export default function UserProfilePage() {
-  const { id } = useParams();
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [storedUserId, setStoredUserId] = useState<string | null>(null);
-  
+export default function UserProfile() {
+  const [user, setUser] = useState<UserProfileData | null>(null);
+  const params = useParams<{ id: string }>();
 
   useEffect(() => {
-      if (typeof window !== "undefined") {
-        setStoredUserId(localStorage.getItem("user_id"));
-        const userId = localStorage.getItem("user_id");
-        console.log(userId);
-      }
-    }, []);
+    if (!params.id) return;
 
-  const fetchProfile = async () => {
-    try {
-      if (!id) return; // Agar id nahi mili to skip
-     const userId = localStorage.getItem("user_id");
+    axios
+      .get<UserProfileData>(`http://127.0.0.1:8000/api/users/${params.id}`)
+      .then((res) => setUser(res.data))
+      .catch((err) => console.error("Profile fetch error:", err));
+  }, [params.id]);
 
-      const res = await api.get(`users/${userId}/`);
-      setProfile(res.data);
-    } catch (err) {
-      console.error("Failed to fetch profile:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProfile();
-  }, [id]);
-
-  if (!id) return <div className="p-6 text-center">Invalid user ID.</div>;
-  if (loading) return <div className="p-6 text-center">Loading profile...</div>;
-  if (!profile) return <div className="p-6 text-center">User not found.</div>;
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <p className="text-gray-500">Loading...</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10">
-      <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-lg p-8">
-        <div className="flex flex-col items-center">
-          {profile.avatar_url ? (
-            <Image
-              src={profile.avatar_url}
-              alt={profile.user.username}
-              width={120}
-              height={120}
-              className="rounded-full object-cover"
-            />
-          ) : (
-            <div className="w-28 h-28 bg-gray-200 rounded-full flex items-center justify-center text-3xl font-bold text-gray-700">
-              {profile.user.username.charAt(0).toUpperCase()}
-            </div>
-          )}
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-10">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className="max-w-3xl mx-auto bg-white rounded-2xl shadow-xl p-8 border"
+      >
+        <div className="flex flex-col md:flex-row gap-6 items-center md:items-start">
+          {/* Avatar */}
+          <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-indigo-500">
+            {user.avatar_url ? (
+              <Image
+                src={user.avatar_url}
+                alt={`${user.user.username} Avatar`}
+                width={128}
+                height={128}
+                className="object-cover"
+              />
+            ) : (
+              <div className="bg-indigo-500 text-white w-full h-full flex items-center justify-center text-4xl font-bold">
+                {user.user.username.charAt(0).toUpperCase()}
+              </div>
+            )}
+          </div>
 
-          <h1 className="text-2xl font-bold mt-4">{profile.user.username}</h1>
-          <p className="text-gray-500">{profile.bio}</p>
-        </div>
-
-        <div className="flex justify-around mt-6 text-center">
+          {/* User Info */}
           <div>
-            <p className="font-bold text-lg">{profile.posts_count}</p>
-            <p className="text-gray-500 text-sm">Posts</p>
-          </div>
-          <div>
-            <p className="font-bold text-lg">{profile.followers_count}</p>
-            <p className="text-gray-500 text-sm">Followers</p>
-          </div>
-          <div>
-            <p className="font-bold text-lg">{profile.following_count}</p>
-            <p className="text-gray-500 text-sm">Following</p>
-          </div>
-        </div>
+            <h2 className="text-3xl font-extrabold text-gray-900">
+              {user.user.username}
+            </h2>
+            <p className="text-gray-500">{user.user.email}</p>
+            <p className="mt-3 text-gray-700">{user.bio}</p>
 
-        <div className="mt-6 space-y-3">
-          {profile.website && (
-            <div className="flex items-center gap-2 text-blue-500">
-              <Globe size={18} />
-              <a
-                href={profile.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:underline"
-              >
-                {profile.website}
-              </a>
+            {/* Location & Website */}
+            <div className="mt-4 flex gap-6 text-sm text-gray-600">
+              <span>📍 {user.location || "Not provided"}</span>
+              <span>🌐 {user.website || "No website"}</span>
             </div>
-          )}
-          {profile.location && (
-            <div className="flex items-center gap-2 text-gray-600">
-              <MapPin size={18} /> {profile.location}
+
+            {/* Stats */}
+            <div className="mt-6 flex gap-6">
+              <span className="font-semibold">
+                {user.followers_count} Followers
+              </span>
+              <span className="font-semibold">
+                {user.following_count} Following
+              </span>
+              <span className="font-semibold">{user.posts_count} Posts</span>
             </div>
-          )}
-          <div className="text-gray-500 text-sm">
-            Privacy: <span className="capitalize">{profile.privacy}</span>
           </div>
         </div>
-
-        <div className="mt-8 flex justify-center gap-4">
-          <Button>
-            <UserPlus size={16} className="mr-2" />
-            Follow
-          </Button>
-          <Button variant="secondary">
-            <Users size={16} className="mr-2" />
-            Message
-          </Button>
-        </div>
-      </div>
+      </motion.div>
     </div>
   );
 }

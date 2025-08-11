@@ -14,6 +14,7 @@ import { motion } from "framer-motion";
 interface Post {
   id: number;
   content: string;
+  title: string;
   author: string;
   user_id: string;
   created_at: string;
@@ -112,9 +113,17 @@ export default function PostDetailsPage() {
     }
   };
 
-  const handleLike = () => {
+  const handleLike = async () => {
     setLiked(!liked);
-    // TODO: Like API call
+    try {
+      await api.post(
+        `interaction/${id}/likes/`,
+        { liked },
+        { headers: { Authorization: `Bearer ${accessToken}` } }
+      );
+    } catch (err) {
+      console.error("Failed to like post:", err);
+    }
   };
 
   const handleCommentSubmit = async () => {
@@ -152,36 +161,40 @@ export default function PostDetailsPage() {
   const isAuthor = storedUserId && storedUserId === post.user_id;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-gray-50 via-white to-gray-100 pb-20">
-      {/* Header Image */}
+    <div className="min-h-screen bg-gradient-to-b from-gray-50 via-white to-gray-100 pb-20 relative overflow-hidden">
+      {/* Subtle Background Glow */}
+      <div className="absolute top-0 left-0 w-[700px] h-[700px] bg-pink-200/30 rounded-full blur-[160px] -z-10 animate-pulse" />
+      <div className="absolute bottom-0 right-0 w-[700px] h-[700px] bg-purple-200/30 rounded-full blur-[160px] -z-10 animate-pulse" />
+
+      {/* Header Image with Parallax */}
       {post.image_url && (
-        <div className="relative w-full h-[420px] md:h-[500px] overflow-hidden">
+        <div className="relative w-full h-[420px] md:h-[500px] overflow-hidden group">
           <motion.div
             initial={{ scale: 1.05 }}
             animate={{ scale: 1 }}
-            transition={{ duration: 0.8 }}
+            transition={{ duration: 1, ease: "easeOut" }}
             className="w-full h-full"
           >
             <Image
               src={post.image_url}
               alt="Post Cover"
               fill
-              className="object-cover"
+              className="object-cover transform group-hover:scale-105 transition duration-700"
               priority
             />
           </motion.div>
-          <div className="absolute inset-0 bg-gradient-to-b from-black/50 via-transparent to-white/90" />
+          <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-transparent to-white/90" />
         </div>
       )}
 
-      {/* Content */}
+      {/* Content Card */}
       <motion.div
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.6 }}
+        transition={{ duration: 0.6, ease: "easeOut" }}
         className="max-w-4xl mx-auto -mt-28 px-6"
       >
-        <div className="bg-white shadow-2xl rounded-2xl p-8 md:p-12 border border-gray-100 relative z-10">
+        <div className="bg-white/70 backdrop-blur-xl shadow-2xl rounded-3xl p-8 md:p-12 border border-white/40 relative z-10">
           {isEditing ? (
             <div className="space-y-4">
               <Textarea
@@ -202,18 +215,26 @@ export default function PostDetailsPage() {
             </div>
           ) : (
             <>
-              {/* Glowing Category */}
-              <span className="inline-block px-4 py-1 rounded-full text-white font-semibold text-sm shadow-lg bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 animate-pulse">
+              {/* Floating Category Tag */}
+              <motion.span
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.2 }}
+                className="inline-block px-5 py-1 rounded-full text-white font-semibold text-sm shadow-lg bg-gradient-to-r from-purple-500 via-pink-500 to-orange-400 animate-[pulse_3s_infinite]"
+              >
                 {post.category}
-              </span>
+              </motion.span>
 
               {/* Big Header */}
-              <h1 className="text-5xl md:text-6xl font-extrabold text-gray-900 leading-tight mt-4">
-                {post.category} — A Deep Dive
+              <h1 className="text-5xl md:text-6xl font-extrabold text-gray-900 leading-tight mt-4 tracking-tight">
+                {post.title || `${post.category} — A Deep Dive`}
               </h1>
 
               {/* Author */}
-              <div
+              <motion.div
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 }}
                 onClick={() => router.push(`/users/${post.user_id}`)}
                 className="mt-5 flex items-center gap-3 cursor-pointer group"
               >
@@ -225,16 +246,16 @@ export default function PostDetailsPage() {
                 <p className="text-gray-700 font-medium group-hover:text-indigo-600 transition">
                   {post.author}
                 </p>
-              </div>
+              </motion.div>
 
               {/* Like & Comment */}
               <div className="flex gap-6 text-gray-600 mt-6">
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={handleLike}
-                  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition shadow-sm ${
+                  className={`flex items-center gap-2 px-5 py-2 rounded-xl transition shadow-sm ${
                     liked
-                      ? "bg-blue-50 text-blue-600"
+                      ? "bg-blue-100 text-blue-600 shadow-inner"
                       : "hover:bg-gray-100"
                   }`}
                 >
@@ -245,7 +266,7 @@ export default function PostDetailsPage() {
                 <motion.button
                   whileTap={{ scale: 0.9 }}
                   onClick={() => setShowCommentBox(!showCommentBox)}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100 transition shadow-sm"
+                  className="flex items-center gap-2 px-5 py-2 rounded-xl hover:bg-gray-100 transition shadow-sm"
                 >
                   <MessageCircle size={20} />
                   Comment
@@ -254,20 +275,29 @@ export default function PostDetailsPage() {
 
               {/* Comment Input */}
               {showCommentBox && (
-                <div className="mt-4 flex gap-2">
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 flex gap-2"
+                >
                   <Input
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     placeholder="Write a comment..."
                   />
                   <Button onClick={handleCommentSubmit}>Send</Button>
-                </div>
+                </motion.div>
               )}
 
               {/* Post Content */}
-              <div className="prose prose-lg mt-8 max-w-none text-gray-800">
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+                className="prose prose-lg mt-8 max-w-none text-gray-800"
+              >
                 <p>{post.content}</p>
-              </div>
+              </motion.div>
 
               {/* Edit/Delete */}
               {isAuthor && (
