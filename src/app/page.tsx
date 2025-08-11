@@ -1,21 +1,29 @@
 "use client";
 
-import ProtectedRoute from "@/components/ProtectedRoutes";
-import api from "@/lib/api";
 import { useEffect, useState } from "react";
-import LogoutButton from "@/components/LogoutButton";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
+import ProtectedRoute from "@/components/ProtectedRoutes";
+import api from "@/lib/api";
+import LogoutButton from "@/components/LogoutButton";
 import LikeButton from "@/components/shsfui/button/like-button";
+import PostSkeleton from "@/components/PostSkeleton";
 
-type Post = {
+// Post type
+interface Post {
   id: number;
   content: string;
   category: string;
   image_url?: string;
   like_count: number;
   comment_count: number;
-};
+}
+
+// API response type
+interface PaginatedResponse {
+  results?: Post[];
+  [key: string]: Post[] | number | string | undefined;
+}
 
 export default function HomePage() {
   const [posts, setPosts] = useState<Post[]>([]);
@@ -23,40 +31,66 @@ export default function HomePage() {
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("general");
   const [image, setImage] = useState<File | null>(null);
+  const [loading, setLoading] = useState<boolean>(true);
 
-  const fetchPosts = () => {
-    api.get("posts/?ordering=-created_at").then((res) => {
-      setPosts(res.data.results || res.data);
-    });
+  // Fetch posts
+  const fetchPosts = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get<PaginatedResponse | Post[]>(
+        "posts/?ordering=-created_at"
+      );
+
+      const fetchedPosts = Array.isArray(res.data)
+        ? res.data
+        : res.data.results || [];
+
+      setPosts(fetchedPosts);
+    } catch (error) {
+      console.error("Error fetching posts:", error);
+      setPosts([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchPosts();
   }, []);
 
+  // Create a new post
   const handleCreatePost = async () => {
     if (!content.trim()) return;
 
-    const formData = new FormData();
-    formData.append("content", content);
-    formData.append("category", category);
-    if (image) formData.append("image", image);
+    try {
+      const formData = new FormData();
+      formData.append("content", content);
+      formData.append("category", category);
+      if (image) formData.append("image", image);
 
-    const res = await api.post("posts/", formData, {
-      headers: { "Content-Type": "multipart/form-data" },
-    });
+      const token = localStorage.getItem("access_token");
 
-    setPosts((prev) => [res.data, ...prev]);
-    setContent("");
-    setCategory("general");
-    setImage(null);
-    setShowModal(false);
+      const res = await api.post<Post>("posts/", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      setPosts((prev) => [res.data, ...prev]);
+      setContent("");
+      setCategory("general");
+      setImage(null);
+      setShowModal(false);
+    } catch (error) {
+      console.error("Error creating post:", error);
+    }
   };
 
   return (
     <ProtectedRoute>
       <div className="min-h-screen bg-gradient-to-br from-[#0a0f1f] via-[#111827] to-[#0a0f1f] text-white relative overflow-hidden">
-        {/* Animated Background Orbs */}
+        {/* Animated Background */}
         <motion.div
           className="absolute top-0 left-0 w-[600px] h-[600px] bg-purple-500/20 rounded-full blur-[160px] -translate-x-1/2 -translate-y-1/2"
           animate={{ y: [0, 30, 0] }}
@@ -68,7 +102,7 @@ export default function HomePage() {
           transition={{ repeat: Infinity, duration: 12 }}
         />
 
-        {/* Top Navigation */}
+        {/* Header */}
         <header className="flex items-center justify-between px-8 py-4 backdrop-blur-xl bg-white/5 border-b border-white/10 sticky top-0 z-50 shadow-lg">
           <h1 className="text-3xl font-extrabold tracking-tight bg-gradient-to-r from-blue-400 to-purple-500 bg-clip-text text-transparent drop-shadow-md">
             SocialSphere
@@ -86,9 +120,12 @@ export default function HomePage() {
 
         {/* Posts Grid */}
         <main className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
-          <AnimatePresence>
-            {posts.length > 0 ? (
-              posts.map((post, idx) => (
+          {loading ? (
+            // Sirf skeleton render karo jab loading ho
+            Array.from({ length: 6 }).map((_, idx) => <PostSkeleton key={idx} />)
+          ) : posts.length > 0 ? (
+            <AnimatePresence>
+              {posts.map((post, idx) => (
                 <motion.div
                   key={post.id}
                   initial={{ opacity: 0, y: 30 }}
@@ -98,7 +135,10 @@ export default function HomePage() {
                   onClick={() => (window.location.href = `/posts/${post.id}`)}
                   className="group relative rounded-2xl overflow-hidden shadow-xl cursor-pointer border border-white/10 hover:scale-[1.03] hover:shadow-2xl transition-all duration-500"
                   style={{
-                    backgroundImage: `url(${post.image_url || "https://images.unsplash.com/photo-1503264116251-35a269479413"})`,
+                    backgroundImage: `url(${
+                      post.image_url ||
+                      "https://images.unsplash.com/photo-1503264116251-35a269479413"
+                    })`,
                     backgroundSize: "cover",
                     backgroundPosition: "center",
                   }}
@@ -108,7 +148,9 @@ export default function HomePage() {
                     <h2 className="text-lg font-bold bg-gradient-to-r from-blue-400 to-purple-400 bg-clip-text text-transparent">
                       {post.category}
                     </h2>
-                    <p className="mt-2 text-sm text-gray-200 line-clamp-3">{post.content}</p>
+                    <p className="mt-2 text-sm text-gray-200 line-clamp-3">
+                      {post.content}
+                    </p>
                     <div className="flex gap-4 mt-4 items-center text-sm text-gray-300">
                       <LikeButton
                         initialLiked={false}
@@ -116,7 +158,10 @@ export default function HomePage() {
                           setPosts((prev) =>
                             prev.map((p) =>
                               p.id === post.id
-                                ? { ...p, like_count: p.like_count + (isLiked ? 1 : -1) }
+                                ? {
+                                    ...p,
+                                    like_count: p.like_count + (isLiked ? 1 : -1),
+                                  }
                                 : p
                             )
                           );
@@ -127,17 +172,11 @@ export default function HomePage() {
                     </div>
                   </div>
                 </motion.div>
-              ))
-            ) : (
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="col-span-full text-gray-400 text-center"
-              >
-                No posts yet
-              </motion.p>
-            )}
-          </AnimatePresence>
+              ))}
+            </AnimatePresence>
+          ) : (
+            <p className="col-span-full text-gray-400 text-center">No posts yet</p>
+          )}
         </main>
 
         {/* Floating Action Button */}
@@ -158,7 +197,7 @@ export default function HomePage() {
           </button>
         </motion.div>
 
-        {/* Modal */}
+        {/* Create Post Modal */}
         <AnimatePresence>
           {showModal && (
             <motion.div

@@ -10,13 +10,14 @@ import { Textarea } from "@/components/ui/textarea";
 import Image from "next/image";
 import { MessageCircle, ThumbsUp } from "lucide-react";
 import { motion } from "framer-motion";
+import DetailedPostSkeleton from "@/components/DetailedPostSkeleton";
 
 interface Post {
   id: number;
   content: string;
   title: string;
   author: string;
-  user_id: string;
+  author_id: number; // ✅ backend should return this
   created_at: string;
   updated_at: string;
   image_url: string | null;
@@ -44,20 +45,19 @@ export default function PostDetailsPage() {
   const [isEditing, setIsEditing] = useState(false);
   const [editContent, setEditContent] = useState("");
   const [editCategory, setEditCategory] = useState("general");
-  const [storedUserId, setStoredUserId] = useState<string | null>(null);
+  const [storedUserId, setStoredUserId] = useState<number | null>(null);
   const [showCommentBox, setShowCommentBox] = useState(false);
   const [comment, setComment] = useState("");
   const [liked, setLiked] = useState(false);
 
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setStoredUserId(localStorage.getItem("user_id"));
-    }
+    const idFromStorage = localStorage.getItem("user_id");
+    if (idFromStorage) setStoredUserId(Number(idFromStorage));
   }, []);
 
   const fetchPost = async () => {
     try {
-      const res = await api.get(`posts/${id}/`, {
+      const res = await api.get<Post>(`posts/${id}/`, {
         headers: { Authorization: `Bearer ${accessToken}` },
       });
       setPost(res.data);
@@ -72,9 +72,12 @@ export default function PostDetailsPage() {
 
   const fetchComments = async () => {
     try {
-      const res = await api.get(`interaction/posts/${id}/comments/`, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
+      const res = await api.get<Comment[]>(
+        `interaction/posts/${id}/comments/`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
       setComments(res.data);
     } catch (err) {
       console.error("Failed to fetch comments:", err);
@@ -89,7 +92,7 @@ export default function PostDetailsPage() {
 
   const handleUpdate = async () => {
     try {
-      const res = await api.patch(
+      const res = await api.patch<Post>(
         `posts/${id}/`,
         { content: editContent, category: editCategory },
         { headers: { Authorization: `Bearer ${accessToken}` } }
@@ -114,11 +117,12 @@ export default function PostDetailsPage() {
   };
 
   const handleLike = async () => {
-    setLiked(!liked);
+    const newLiked = !liked;
+    setLiked(newLiked);
     try {
       await api.post(
-        `interaction/${id}/likes/`,
-        { liked },
+        `interaction/posts/${id}/like/`,
+        { liked: newLiked },
         { headers: { Authorization: `Bearer ${accessToken}` } }
       );
     } catch (err) {
@@ -145,7 +149,7 @@ export default function PostDetailsPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen text-lg font-semibold text-gray-600">
-        Loading post...
+        <DetailedPostSkeleton />
       </div>
     );
   }
@@ -158,15 +162,15 @@ export default function PostDetailsPage() {
     );
   }
 
-  const isAuthor = storedUserId && storedUserId === post.user_id;
+  const isAuthor = storedUserId === post.author_id; // ✅ now uses correct field
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 via-white to-gray-100 pb-20 relative overflow-hidden">
-      {/* Subtle Background Glow */}
+      {/* Background glow */}
       <div className="absolute top-0 left-0 w-[700px] h-[700px] bg-pink-200/30 rounded-full blur-[160px] -z-10 animate-pulse" />
       <div className="absolute bottom-0 right-0 w-[700px] h-[700px] bg-purple-200/30 rounded-full blur-[160px] -z-10 animate-pulse" />
 
-      {/* Header Image with Parallax */}
+      {/* Header Image */}
       {post.image_url && (
         <div className="relative w-full h-[420px] md:h-[500px] overflow-hidden group">
           <motion.div
@@ -187,7 +191,7 @@ export default function PostDetailsPage() {
         </div>
       )}
 
-      {/* Content Card */}
+      {/* Post Content */}
       <motion.div
         initial={{ opacity: 0, y: 40 }}
         animate={{ opacity: 1, y: 0 }}
@@ -215,7 +219,7 @@ export default function PostDetailsPage() {
             </div>
           ) : (
             <>
-              {/* Floating Category Tag */}
+              {/* Category */}
               <motion.span
                 initial={{ opacity: 0, y: -10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -225,7 +229,7 @@ export default function PostDetailsPage() {
                 {post.category}
               </motion.span>
 
-              {/* Big Header */}
+              {/* Title */}
               <h1 className="text-5xl md:text-6xl font-extrabold text-gray-900 leading-tight mt-4 tracking-tight">
                 {post.title || `${post.category} — A Deep Dive`}
               </h1>
@@ -235,7 +239,7 @@ export default function PostDetailsPage() {
                 initial={{ opacity: 0, x: -20 }}
                 animate={{ opacity: 1, x: 0 }}
                 transition={{ delay: 0.3 }}
-                onClick={() => router.push(`/users/${post.user_id}`)}
+                onClick={() => router.push(`/users/${post.author_id}`)} // ✅ fixed
                 className="mt-5 flex items-center gap-3 cursor-pointer group"
               >
                 <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center group-hover:bg-indigo-200 transition">
@@ -273,7 +277,7 @@ export default function PostDetailsPage() {
                 </motion.button>
               </div>
 
-              {/* Comment Input */}
+              {/* Comment Box */}
               {showCommentBox && (
                 <motion.div
                   initial={{ opacity: 0, y: -10 }}
@@ -289,7 +293,7 @@ export default function PostDetailsPage() {
                 </motion.div>
               )}
 
-              {/* Post Content */}
+              {/* Content */}
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
