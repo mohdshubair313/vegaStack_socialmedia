@@ -6,9 +6,12 @@ const api = axios.create({
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("access");
-  if (token) {
+
+  // Auth endpoints pe token attach mat karo
+  if (token && !config.url?.includes("auth/register") && !config.url?.includes("auth/login")) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
   return config;
 });
 
